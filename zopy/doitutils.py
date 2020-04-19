@@ -47,7 +47,7 @@ def clean_targets( *targets ):
 def status( query ):
     try:
         status = ""
-        cmdstring = "ls -lR ./{}".format( query )
+        cmdstring = "ls -lR {}".format( query )
         cmd = subprocess.Popen( cmdstring, shell=True, stdout=subprocess.PIPE )
         for line in cmd.stdout:
             status += line

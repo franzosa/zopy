@@ -157,14 +157,18 @@ def write_rowdict( headers, values=None, fh=None ):
             row.append( values[k] )
         tprint( *row, file=fh )
 
-def col2list( filename, index=0, func=None, headers=False ):
+def col2list( filename, index=0, limit=None, func=None, headers=False ):
     """ quickly load a column from a file """
     ret = []
+    counter = 0
     for row in iter_rows( filename ):
         if headers:
             headers = False
         else:
             ret.append( row[index] )
+            counter += 1
+        if limit is not None and counter >= limit:
+            break
     if func is not None:
         ret = [func( k ) for k in ret]
     return ret

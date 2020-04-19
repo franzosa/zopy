@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections import Counter
 
 import zopy.utils as zu
 
@@ -41,10 +42,12 @@ class GFF( ):
 
     def __init__( self, path ):
         self.loci = []
+        counter = 0
         for row in zu.iter_rows( path ):
             if row[0][0] != "#":
-                self.loci.append( Locus( row ) )
-
+                counter += 1
+                self.loci.append( Locus( row, counter ) )        
+                
     def iter_loci( self ):
         for L in self.loci:
             yield L
@@ -66,7 +69,9 @@ class GFF( ):
 
 class Locus( ):
 
-    def __init__( self, gff_row ):
+    def __init__( self, gff_row, counter ):
+        # unique tag for locus based on position in GFF
+        self.index = counter
         # gff fields
         if len( gff_row ) != len( c_gff_fields ):
             zu.die( "Bad GFF row:", gff_row )
