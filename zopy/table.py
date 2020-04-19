@@ -20,25 +20,23 @@ import zopy.utils as zu
 
 c_origin = "#"
 c_na = "#N/A"
+c_max_print = 5
 
 #-------------------------------------------------------------------------------
 # helper functions
 #-------------------------------------------------------------------------------
 
 def load_from_nested_dicts( T ):
-    if T.origin is None:
-        T.origin = c_origin
     if T.rowheads is None:
         T.rowheads = sorted( T.source )
     if T.colheads is None:
         unique = set( )
-        for k, v in source.items( ):
-            unique.update( v )
+        for k, inner in source.items( ):
+            unique.update( inner )
         T.colheads = sorted( unique )
     for r in T.rowheads:
         inner = T.source[r]
-        T.data.append( [inner.get( c, c_na ) for c in T.colheads] )
-    return None
+        T.data.append( [inner.get( c, T.missing ) for c in T.colheads] )
 
 def load_from_nested_lists( T, rows ):
     counter = 0
@@ -50,15 +48,12 @@ def load_from_nested_lists( T, rows ):
             T.rowheads.append( row[0] if not T.headless else counter )
             T.data.append( row[1:] if not T.headless else row )       
         counter += 1
-    return None
 
 def load_from_file_handle( T, fh ):
     load_from_nested_lists( T, csv.reader( fh, dialect="excel_tab" ) )
-    return None
 
 def load_from_file( T, path ):
     load_from_file_handle( T, zu.try_open( path ) )
-    return None
 
 def deduplicate( items ):
     seen = set( )
@@ -70,18 +65,30 @@ def deduplicate( items ):
         items[i] = k
         seen.add( k )
     zu.say( "Some fields were deduplicated." )
-    return None
-        
+
+def pretty_list( items ):
+    items = list( items )
+    if len( items ) > c_max_print:
+        extra = "& {} others".format( len( items ) - c_max_print )
+        items = [items[0:c_max_print] + [extra]
+    return items
+    
 #-------------------------------------------------------------------------------
 # begin main object
 #-------------------------------------------------------------------------------
 
 class Table:
     
-    def __init__( self, source=None,
-                  data=None, colheads=None, rowheads=None,
-                  origin=None, missing=None,
-                  headless=False, verbose=True ):
+    def __init__( self,
+                  source=None,
+                  data=None,
+                  colheads=None,
+                  rowheads=None,
+                  origin=None,
+                  missing=None,
+                  headless=False,
+                  verbose=True,
+    ):
 
         self.source = source
         
@@ -151,7 +158,6 @@ class Table:
     def report( self, *args ):
         if self.verbose:
             zu.say( self.source, ":", " ".join( [str( k ) for k in args] ) )
-        return None
             
     def size( self ):
         return "<{} ROW x {} COL{}>".format(
@@ -173,20 +179,17 @@ class Table:
             W.writerow( [self.rowheads[i]] + row )
         if path is not None:
             fh.close( )
-        return None
 
     def rowsort( self, order=None ):
         order = sorted( self.rowheads ) if order is None else order
         self.data = [self.data[self.rowmap[r]] for r in order]
         self.remap( )
-        return None
 
     def colsort( self, order=None ):
+        # no need for final remap, since it's included in transpose
         self.transpose( )
         self.rowsort( order=order )
         self.transpose( )
-        # no need for final remap, since it's included in transpose
-        return None
 
     #### SLICE OPERATIONS ####
 
@@ -205,159 +208,166 @@ class Table:
         col = self.col( index )
         return {self.rowheads[k]:col[k] for k in range( len( self.rowheads ) )}
 
-    def entry( self, r, c ):
+    def get( self, r, c ):
         r, c = self.rowdex( r ), self.coldex( c )
         return self.data[r][c]
 
     #### APPLY FUNCTIONS ####
 
     def transpose( self ):
+        """ transpose the table data in place """
         self.data = [[row[i] for row in self.data] for i in range( len( self.colheads ) )]
         self.colheads, self.rowheads = self.rowheads, self.colheads
         self.transposed = not self.transposed
         self.remap( )
         self.report( "Transposed the table." )
-        return None
         
     def promote( self, index ):
-        """ Pick a row to become the new row[0]; i.e. make it the colhead row """
+        """ pick a row to become the new row[0]; i.e. make it the colhead row """
         self.colheads = self.data.pop( self.rowdex( index ) )
         self.remap( )
-        return None
 
     def set( self, r, c, value ):
-        """ Set the ( r, c ) entry of the table """
+        """ set the ( r, c ) entry of the table """
         r, c = self.rowdex( r ), self.coldex( c )
         self.data[r][c] = value
-        return None
         
     def apply_rowheads( self, function ):
         """ applies a function to the rowheads and remaps ( to avoid collisions ) """
         self.rowheads = [function( r ) for r in rowheads]
         self.remap( )
-        return None
         
     def apply_colheads( self, function ):
         """ applies a function to the colheads and remaps ( to avoid collisions ) """
         self.colheads = [function( c ) for c in colheads]
         self.remap( )
-        return None
         
-    def apply_entries( self, function ):
-        """ applies a function to each entry in the table """
-        # updated to be more efficient; now based on list comprehension not iteration
-        for i, row in self.data:
-            self.data[i] = [function( k ) for k in row]
-        return None
-
-    # ***** PAUSED HERE *****
-    
     def apply_row( self, index, function ):
         """ applies a function to each entry in a row """
-        rowhead = self.rowdex( index )
-        for colhead, value in self.rowdict( rowhead ).items( ):
-            self.set( rowhead, colhead, function( value ) )
-
+        r = self.rowdex( index )
+        self.data[r] = [function( k ) for k in self.data[r]]
+        
     def apply_col( self, index, function ):
         """ applies a function to each entry in a col """
-        colhead = self.coldex( index )
-        for rowhead, value in self.coldict( colhead ).items( ):
-            self.set( rowhead, colhead, function( value ) )
-                 
-    # ---------------------------------------------------------------
-    # generators
-    # ---------------------------------------------------------------
+        c = self.coldex( index )
+        for i, row in enumerate( self.data ):
+            self.data[i][c] = function( row[c] )
+
+    def apply_entries( self, function ):
+        """ applies a function to each entry in the table """
+        for r in self.rowheads:
+            self.apply_row( r, function )
+            
+    #### GENERATORS ####
     
     def iter_rows( self ):
         """ iterate over rows; yields rowhead, row """
-        for rowhead in self.rowheads:
-            yield rowhead, self.row( rowhead )
+        for r in self.rowheads:
+            yield r, self.row( r )
 
     def iter_cols( self ):
         """ iterate over cols; yields colhead, col """                         
-        for colhead in self.colheads:
-            yield colhead, self.col( colhead )
+        for c in self.colheads:
+            yield c, self.col( c )
 
     def iter_entries( self ):
         """ iterate over entries; yields ( r )owhead, ( c )olhead, entry( r, c ) """
-        for i, rowhead in enumerate( self.rowheads ):
-            for j, colhead in enumerate( self.colheads ):
-                # **** (row|col)heads don't include the origin position, so must offset i,j by 1 ****
-                yield rowhead, colhead, self.data[i+1][j+1]
+        for r in self.rowheads:
+            for c in self.colheads:
+                yield r, c, self.get( r, c )
 
-    # ---------------------------------------------------------------
-    # reduce method, operates like python's filter on rows
-    # ---------------------------------------------------------------
+    #### FILTER OPERATIONS ####               
 
-    def reduce( self, function, protect_headers=True, transposed=False, invert=False, in_place=True ):
-        """ apply a function to the rows of the table and rebuild with or return true evals """
+    def filter( self,
+                function,
+                t=None, transposed=False,
+                i=None, inverted=False,
+                n=None, new=True,
+    ):
+
+        """ apply a function to the rows of table (via headers) and rebuild or return true evals """
+
+        # process shortcuts 
+        transposed = transposed if t is None else t
+        inverted = inverted if i is None else i
+        new = new if n is None else n
+
         # flip?
-        if transposed: 
-            self.transpose()
-        # auto-pass headers?
-        data2 = [self.data[0] if protect_headers else []]
-        start = 1 if protect_headers else 0
+        if transposed: self.transpose( )
+
         # apply test to rows
-        if not invert:
-            data2 += [row for row in self.data[start:] if function( row )]
-        else:
-            data2 += [row for row in self.data[start:] if not function( row )]
+        mask = [function( r ) for r in self.rowheads]
+        mask = mask if not inverted else [not k for k in mask]
+
         # (1) rebuild table
-        if in_place:
-            self.data = data2
-            if transposed: 
-                self.transpose()
-            self.remap()
-            self.report( "--> reduced size is", self.size() )
+        if not new:
+            self.data = [row for test, row in zip( mask, self.data ) if test]
+            self.rowheads = [r for test, r in zip( mask, self.rowheads ) if test]
+            if transposed: self.transpose( )
+            self.remap( )
+            self.report( "--> reduced size is", self.size( ) )
             return None
         # (2) return rows that passed as new table
         else:
-            if transposed: 
-                self.transpose()
-            # rebuild data2 to avoid referencing self.data rows
-            data2 = [row[:] for row in data2]
-            # this returns to the outer function, which must also return
-            new_table = table( data2, verbose=self.isverbose )
-            # if we were working on a transposed table, must also transpose selected rows
-            if transposed: 
-                new_table.transpose()
+            new_table = Table(
+                data = [row[:] for test, row in zip( mask, self.data ) if test]
+                rowheads = [r for test, r in zip( mask, self.rowheads ) if test]
+                colheads = self.colheads[:],
+                origin = self.origin,
+                missing = self.missing,
+                transposed = self.transposed,
+                verbose = self.verbose,
+            )
+            if transposed:
+                self.transpose( )
+                new_table.transpose( )
             return new_table
 
-    # ---------------------------------------------------------------
-    # methods that call reduce to do things
-    # ---------------------------------------------------------------
+    #### METHODS THAT USE FILTER ####
 
-    def grep( self, index, patterns, **kwargs ):
-        """ restrict rows to those whose col[index] position matches a pattern """
+    def grep( self, patterns, f=None, focus=None, **kwargs ):
+        """ restrict rows to those whose focal position matches a pattern """
+        focus = focus if f is None else f
         if isinstance( patterns, str ):
             patterns = [patterns]
-        self.report( "applying grep", "index=", index, "patterns=", pretty_list( patterns ), kwargs )
-        return self.reduce( lambda row: any( [re.search( k, row[self.coldex( index )] ) for k in patterns] ), **kwargs )
+        self.report( "applying grep", "focus=", index, "patterns=", pretty_list( patterns ), kwargs )
+        anymatch = lambda x: any( [re.search( p, x ) for p in patterns] )
+        function = lambda r: anymatch( r if focus is None else self.get( r, focus ) )
+        return self.filter( function, **kwargs )
 
-    def select( self, index, choices, **kwargs ):
-        """ select rows whose col[index] entry is in choices """
-        # this allows us to test if choices is a scalar or list; strange because strings are iterable?
+    def select( self, choices, f=None, focus=None, **kwargs ):
+        """ select rows whose focal entry is in choices """
+        focus = focus if f is None else f
         if isinstance( choices, str ):
             choices = [choices]
-        self.report( "applying select", "index=", index, "choices=", pretty_list( choices ), kwargs )
-        return self.reduce( lambda row: row[self.coldex( index )] in choices, **kwargs )
+        self.report( "applying select", "focus=", focus, "choices=", pretty_list( choices ), kwargs )
+        choices = set( choices )
+        function = lambda r: (r if focus is None else self.get( r, focus )) in choices
+        return self.filter( function, **kwargs )
 
-    def delete( self, index, choices, **kwargs ):
-        """ delete rows whose col[index] entry is in choices """
+    def delete( self, choices, f=None, focus=None, **kwargs ):
+        """ delete rows whose focal entry is in choices """
+        focus = focus if f is None else f
         if isinstance( choices, str ):
             choices = [choices]
-        # this allows us to test if choices is a scalar or list; strange because strings are iterable?
-        self.report( "applying delete", "index=", index, "choices=", pretty_list( choices ), kwargs )
-        return self.reduce( lambda row: row[self.coldex( index )] not in choices, **kwargs )
+        self.report( "applying delete", "focus=", focus, "choices=", pretty_list( choices ), kwargs )
+        choices = set( choices )
+        # only difference from <select> is <not in> here
+        function = lambda r: (r if focus is None else self.get( r, focus )) not in choices
+        return self.filter( function, **kwargs )
 
-    def head( self, index, **kwargs ):
-        """ keep only rows up to head; if inverted, delete rows up to head ( useful for stripping metadata ) """
-        self.report( "applying head", "index=", index, kwargs )
-        return self.reduce( lambda row: self.rowdex( row[0] ) <= self.rowdex( index ), **kwargs )
+    def head( self, header, **kwargs ):
+        """ keep only rows up to header """
+        self.report( "applying head", "header=", header, kwargs )
+        function = lambda r: self.rowdex( r ) <= self.rowdex( header )
+        return self.filter( function, **kwargs )
 
-    def limit( self, index, operation, **kwargs ):
-        """ """
-        op, threshold = re.search( "([<>=]+)(.*)", operation ).groups()
+    def limit( self, header, criterion, **kwargs ):
+        """ keep only rows where field value satisfies numerical criterion """
+        M = re.search( "([<>=]+) *(.*)", criterion ).groups( )
+        if M is None:
+            zu.die( criterion, "is not a valid limit criterion" )
+        op, threshold = M.groups( )
         threshold = float( threshold )
         choices = { 
             "<" : lambda x: float( x ) <  threshold,
@@ -365,15 +375,19 @@ class Table:
             ">" : lambda x: float( x ) >  threshold,
             ">=": lambda x: float( x ) >= threshold,
             }
-        myfunc = choices[op]
+        selector = choices[op]
+        function = lambda r: selector( self.get( r, header ) )                                       
         self.report( "applying limit, requiring field", index, "to be", op, threshold, kwargs )
-        return self.reduce( lambda row: myfunc( row[self.coldex( index )] ), **kwargs )
+        return self.filter( function, **kwargs )
 
-    def unrarify( self, minlevel=0, mincount=1, **kwargs ):
+    def nontrivial( self, minvalue=0, mincount=1, **kwargs ):
         """ applies to numerical table: keep features ( row ) that exceed specified level in specified # of samples """
-        self.report( "applying unrarify", "requiring at least", mincount, "row values exceeding", minlevel, kwargs )
-        return self.reduce( lambda row: mincount <= sum( [1 if item > minlevel else 0 for item in row[1:]] ), **kwargs )
+        function = lambda r: mincount <= len( [k for k in self.row( r ) if k >= minlevel] )
+        self.report( "applying nontrivial", "requiring at least", mincount, "values exceeding", minlevel, kwargs )
+        return self.filter( function, **kwargs )
 
+    # **** paused here ****
+    
     # ---------------------------------------------------------------
     # groupby
     # ---------------------------------------------------------------
@@ -402,7 +416,7 @@ class Table:
         self.transpose()
         dictDataArrays = {}
         for rowhead, row in self.iter_rows( ):
-            stratum = self.entry( rowhead, focus )
+            stratum = self.get( rowhead, focus )
             # the default is a copy of this table's rowheads (currently colheads)
             dictDataArrays.setdefault( stratum, [self.data[0][:]] ).append( [rowhead] + row )
         dictTables = {}
@@ -480,7 +494,7 @@ class Table:
             self.report( "augmentee contains", len( setRowheadOverlap ), "duplicate rowheads (skip)" )
         # note: "colhead in dictColmap" much faster than "colhead in aColheads"
         self.data = self.data + [
-            [rowhead2] + [table2.entry( rowhead2, colhead ) if colhead in table2.colmap else c_strNA for colhead in self.colheads] 
+            [rowhead2] + [table2.get( rowhead2, colhead ) if colhead in table2.colmap else c_strNA for colhead in self.colheads] 
             for rowhead2 in table2.rowheads if rowhead2 not in self.rowmap
             ]
         self.remap()
@@ -598,15 +612,3 @@ class Table:
     # ---------------------------------------------------------------
     # end of the table object
     # ---------------------------------------------------------------
-
-# ---------------------------------------------------------------
-# table-related methods outside of the table object
-# ---------------------------------------------------------------
-
-def pretty_list( items ):
-    """ simplifies printing long argument lists """
-    items = list( items )
-    if len( items ) <= c_iMaxPrintChoices:
-        return items
-    else:
-        return items[0:c_iMaxPrintChoices] + ["{{ + %d others }}" % ( len( items ) - c_iMaxPrintChoices )]
