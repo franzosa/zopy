@@ -26,18 +26,18 @@ c_max_print = 5
 # helper functions
 #-------------------------------------------------------------------------------
 
-def load_from_nested_dicts( T ):
-    if T.rowheads is None:
-        T.rowheads = sorted( T.source )
-    if T.colheads is None:
+def load_from_nested_dicts( T, dd ):
+    if T.rowheads == []:
+        T.rowheads = sorted( dd )
+    if T.colheads == []:
         unique = set( )
-        for k, inner in source.items( ):
+        for k, inner in dd.items( ):
             unique.update( inner )
         T.colheads = sorted( unique )
     for r in T.rowheads:
-        inner = T.source[r]
+        inner = dd.get( r, {} )
         T.data.append( [inner.get( c, T.missing ) for c in T.colheads] )
-
+        
 def load_from_nested_lists( T, rows ):
     counter = 0
     for row in rows:
@@ -50,7 +50,7 @@ def load_from_nested_lists( T, rows ):
         counter += 1
 
 def load_from_file_handle( T, fh ):
-    load_from_nested_lists( T, csv.reader( fh, dialect="excel_tab" ) )
+    load_from_nested_lists( T, csv.reader( fh, dialect="excel-tab" ) )
 
 def load_from_file( T, path ):
     load_from_file_handle( T, zu.try_open( path ) )
@@ -64,13 +64,13 @@ def deduplicate( items ):
             k += "-dup"
         items[i] = k
         seen.add( k )
-    zu.say( "Some fields were deduplicated." )
+    if deduplicated: zu.say( "Some fields were deduplicated." )
 
 def pretty_list( items ):
     items = list( items )
     if len( items ) > c_max_print:
         extra = "& {} others".format( len( items ) - c_max_print )
-        items = [items[0:c_max_print] + [extra]
+        items = [items[0:c_max_print] + [extra]]
     return items
     
 #-------------------------------------------------------------------------------
@@ -87,6 +87,7 @@ class Table:
                   origin=None,
                   missing=None,
                   headless=False,
+                  transposed=False,
                   verbose=True,
     ):
 
@@ -94,70 +95,89 @@ class Table:
         
         self.data = data if data is not None else []
         self.rowheads = rowheads if rowheads is not None else []
-        self.colheads = rowheads if .colheads is not None else []
+        self.colheads = colheads if colheads is not None else []
 
         self.origin = origin if origin is not None else c_origin
         self.missing = missing if missing is not None else c_na
         
+        self.transposed = transposed
         self.headless = headless
         self.verbose = verbose
 
         self.sourcename = None
         self.rowmap = None
         self.colmap = None
-        self.transposed = False
         
         # decide how to load table
-        if isinstance( source, list ):
+        if source is None:
+            self.sourcename = "<runtime>"
+            if not all( [data, rowheads, colheads] ):
+                zu.die( "If no source provided, must provide data/rowheads/colheads" )
+        elif isinstance( source, list ):
             self.sourcename = "<list of lists>"
-            load_from_nested_lists( T )
+            load_from_nested_lists( self, source )
         elif isinstance( source, dict ):
             self.sourcename = "<dict of dicts>"
-            load_from_nested_dicts( T )
+            load_from_nested_dicts( self, source )
         elif isinstance( source, file ):
-            self.sourcename = "<file handle>" )
-            load_from_file_hand( T )
+            self.sourcename = "<file handle>"
+            load_from_file_handle( self, source )
         elif os.path.exists( source ):
             self.sourcename = "<{}>".format( source )
-            load_from_file( T )
-        elif source is None:
-            self.sourcename = "<runtime>"
-            if not all( data, rowheads, colheads ):
-                zu.die( "If no source provided, must provide data/rowheads/colheads" )
+            load_from_file( self, source )
 
         # set up other table elements        
         self.remap( )
-        self.report( "new table with size", self.size( ) )
+        self.report( "New table with size {}.".format( self.size( ) ) )
 
     def remap( self ):
 
         # integrity checks
-        if len( set( [len( row ) for row in self.data] ) ) != 1:
-            zu.die( "Table has inconsistent row lengths." )
-        if len( self.colheads ) != len( self.data[0] ):
-            zu.die( "Table colheads do not align to data." )
-        if len( self.rowheads ) != len( self.data ):
-            zu.die( "Table rowheads do not align to data." )
+        if len( self.data ) > 0:
+            if len( set( [len( row ) for row in self.data] ) ) != 1:
+                zu.die( "Table has inconsistent row lengths." )
+            if len( self.colheads ) != len( self.data[0] ):
+                zu.die( "Table colheads do not align to data." )
+            if len( self.rowheads ) != len( self.data ):
+                zu.die( "Table rowheads do not align to data." )
 
         # auto-replace duplicate field names
         deduplicate( self.rowheads )
         deduplicate( self.colheads )
             
         # build fast maps
-        self.rowmap = {i:k for i, k in enumerate( self.rowheads )}
-        self.colmap = {i:k for i, k in enumerate( self.colheads )}
+        self.rowmap = {k:i for i, k in enumerate( self.rowheads )}
+        self.colmap = {k:i for i, k in enumerate( self.colheads )}
 
     #### UTILITY METHODS ####
     
-    def rowdex( self, i ):
-        return i if isinstance( index, int ) else self.rowmap[i]
+    def rowdex( self, index ):
+        ret = None
+        if isinstance( index, int ) and 0 <= index < len( self.rowheads ):
+            ret = index
+        elif index in self.rowmap:
+            ret = self.rowmap[index]
+        else:
+            self.report( "Bad row index <{}>.".format( index ), die=True )
+            zu.die( )
+        return ret
 
-    def coldex( self, i ):
-        return i if isinstance( index, int ) else self.colmap[i]
+    def coldex( self, index ):
+        ret = None
+        if isinstance( index, int ) and 0 <= index < len( self.colheads ):
+            ret = index
+        elif index in self.colmap:
+            ret = self.colmap[index]
+        else:
+            self.report( "Bad col index <{}>.".format( index ), die=True )
+        return ret
 
-    def report( self, *args ):
-        if self.verbose:
-            zu.say( self.source, ":", " ".join( [str( k ) for k in args] ) )
+    def report( self, *args, **kwargs ):
+        items = [self.sourcename, "::", " ".join( [str( k ) for k in args] )]
+        if kwargs.get( "die", False ):
+            zu.die( *items )
+        elif self.verbose:
+            zu.say( *items )
             
     def size( self ):
         return "<{} ROW x {} COL{}>".format(
@@ -173,16 +193,17 @@ class Table:
         fh = sys.stdout
         if path is not None:
             fh = zu.try_open( path, "w" )
-        W = csv.writer( fh, dialect="excel_tab" )
-        W.writerow( [self.origin] + self.colheads]
+        W = csv.writer( fh, dialect="excel-tab" )
+        W.writerow( [self.origin] + self.colheads )
         for i, row in enumerate( self.data ):
             W.writerow( [self.rowheads[i]] + row )
         if path is not None:
             fh.close( )
 
     def rowsort( self, order=None ):
-        order = sorted( self.rowheads ) if order is None else order
-        self.data = [self.data[self.rowmap[r]] for r in order]
+        order = order if order is not None else sorted( self.rowheads )
+        self.data = [self.row( r ) for r in order]
+        self.rowheads = order
         self.remap( )
 
     def colsort( self, order=None ):
@@ -194,7 +215,8 @@ class Table:
     #### SLICE OPERATIONS ####
 
     def row( self, index ):
-        return self.data[self.rowdex( index )]
+        # note full slice to avoid referencing
+        return self.data[self.rowdex( index )][:]
 
     def col( self, index ):
         index = self.coldex( index )
@@ -234,12 +256,12 @@ class Table:
         
     def apply_rowheads( self, function ):
         """ applies a function to the rowheads and remaps ( to avoid collisions ) """
-        self.rowheads = [function( r ) for r in rowheads]
+        self.rowheads = [function( r ) for r in self.rowheads]
         self.remap( )
         
     def apply_colheads( self, function ):
         """ applies a function to the colheads and remaps ( to avoid collisions ) """
-        self.colheads = [function( c ) for c in colheads]
+        self.colheads = [function( c ) for c in self.colheads]
         self.remap( )
         
     def apply_row( self, index, function ):
@@ -281,15 +303,15 @@ class Table:
     def filter( self,
                 function,
                 t=None, transposed=False,
-                i=None, inverted=False,
-                n=None, new=True,
+                i=None, invert=False,
+                n=None, new=False,
     ):
 
         """ apply a function to the rows of table (via headers) and rebuild or return true evals """
 
         # process shortcuts 
         transposed = transposed if t is None else t
-        inverted = inverted if i is None else i
+        invert = invert if i is None else i
         new = new if n is None else n
 
         # flip?
@@ -297,7 +319,7 @@ class Table:
 
         # apply test to rows
         mask = [function( r ) for r in self.rowheads]
-        mask = mask if not inverted else [not k for k in mask]
+        mask = mask if not invert else [not k for k in mask]
 
         # (1) rebuild table
         if not new:
@@ -305,13 +327,13 @@ class Table:
             self.rowheads = [r for test, r in zip( mask, self.rowheads ) if test]
             if transposed: self.transpose( )
             self.remap( )
-            self.report( "--> reduced size is", self.size( ) )
+            self.report( "new size is", self.size( ) )
             return None
         # (2) return rows that passed as new table
         else:
             new_table = Table(
-                data = [row[:] for test, row in zip( mask, self.data ) if test]
-                rowheads = [r for test, r in zip( mask, self.rowheads ) if test]
+                data = [row[:] for test, row in zip( mask, self.data ) if test],
+                rowheads = [r for test, r in zip( mask, self.rowheads ) if test],
                 colheads = self.colheads[:],
                 origin = self.origin,
                 missing = self.missing,
@@ -330,7 +352,7 @@ class Table:
         focus = focus if f is None else f
         if isinstance( patterns, str ):
             patterns = [patterns]
-        self.report( "applying grep", "focus=", index, "patterns=", pretty_list( patterns ), kwargs )
+        self.report( "applying grep", "focus=", focus, "patterns=", pretty_list( patterns ), kwargs )
         anymatch = lambda x: any( [re.search( p, x ) for p in patterns] )
         function = lambda r: anymatch( r if focus is None else self.get( r, focus ) )
         return self.filter( function, **kwargs )
@@ -356,6 +378,8 @@ class Table:
         function = lambda r: (r if focus is None else self.get( r, focus )) not in choices
         return self.filter( function, **kwargs )
 
+    # **** tested to here ****
+    
     def head( self, header, **kwargs ):
         """ keep only rows up to header """
         self.report( "applying head", "header=", header, kwargs )
@@ -386,7 +410,7 @@ class Table:
         self.report( "applying nontrivial", "requiring at least", mincount, "values exceeding", minlevel, kwargs )
         return self.filter( function, **kwargs )
 
-    # **** paused here ****
+    # **** updated to here ****
     
     # ---------------------------------------------------------------
     # groupby
@@ -494,7 +518,7 @@ class Table:
             self.report( "augmentee contains", len( setRowheadOverlap ), "duplicate rowheads (skip)" )
         # note: "colhead in dictColmap" much faster than "colhead in aColheads"
         self.data = self.data + [
-            [rowhead2] + [table2.get( rowhead2, colhead ) if colhead in table2.colmap else c_strNA for colhead in self.colheads] 
+            [rowhead2] + [table2.get( rowhead2, colhead ) if colhead in table2.colmap else c_na for colhead in self.colheads] 
             for rowhead2 in table2.rowheads if rowhead2 not in self.rowmap
             ]
         self.remap()
@@ -518,7 +542,7 @@ class Table:
                 self.data[i] += [row[j] for j in aIndex]
             # a self-specific row, add all NA entries
             else:
-                self.data[i] += [c_strNA for j in aIndex]
+                self.data[i] += [c_na for j in aIndex]
         self.remap()
         self.report( "extended with cols from", table2.source, "new size is", self.size() )
 
@@ -531,13 +555,13 @@ class Table:
     # methods for filling "empty" cells
     # ---------------------------------------------------------------
 
-    def blank2na( self, value=c_strNA ):
+    def blank2na( self, value=c_na ):
         """ Anything that doesn't match a non-space char is filled with na """
         self.apply_entries( lambda k: k if re.search( "[^\s]", str( k ) ) else value )
         
     def na2zero( self, value=0 ):
         """ Convert NAs to zero values """
-        self.apply_entries( lambda k: value if k == c_strNA else k )
+        self.apply_entries( lambda k: value if k == c_na else k )
 
     # ---------------------------------------------------------------
     # methods for working with metadata
