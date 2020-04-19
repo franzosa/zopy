@@ -8,7 +8,7 @@ from zopy.utils import try_open, say
 from zopy.dictation import col2dict, polymap
 from zopy.enrichments import rank_enrich, c_rank_fields, Link
 # common elements
-import zopy.scripts.enrich_fisher as interface
+import scripts.enrich_fisher as interface
 
 #-------------------------------------------------------------------------------
 # utils specific to this script
