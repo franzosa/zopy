@@ -9,7 +9,8 @@ from scipy.stats.mstats import mquantiles
 
 from zopy.utils import reader, warn, die
 from zopy.table2 import nesteddict2table
-from zopy.scripts.excel import excel
+# changed after git reorg
+from scripts.excel import excel
 
 c_eps = 1e-20
 c_props = "N Sum #0s %0s Min Q1 Q2_Med Q3 Max Mean StDev CfVar".split( )
