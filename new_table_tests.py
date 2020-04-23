@@ -41,9 +41,11 @@ T = Table( dd, rowheads=["B", "A"] )
 T.write( )
 """
 
+"""
 print( "\nTest loading from file" )
 T = Table( "temp.txt" )
 T.write( )
+"""
 
 """
 print( "\nTest transpose" )
@@ -120,3 +122,43 @@ T.delete( ["A", "C"] )
 T.delete( "1", focus="B", t=True )
 T.write( )
 """
+
+"""
+print( "\nTest head" )
+T.head( "B", n=True ).write( )
+T.head( "3", t=True, n=True ).write( )
+"""
+
+"""
+print( "\nTest limit" )
+T.limit( "2", ">0.5", n=True ).write( )
+T.limit( "B", "<0.5", t=True, n=True ).write( )
+"""
+
+"""
+print( "\nTest nontrivial" )
+T.nontrivial( mincount=3, minvalue=0.1, n=True ).write( )
+T.nontrivial( mincount=3, minvalue=0.1, t=True, n=True ).write( )
+"""
+
+T2 = qw( """
++ M 1 2 3 4 5
+M a a b b a a
+A b 0 1 0 0 1
+B a 1 0 0 1 0
+C b 0 1 1 0 1
+D a 1 0 1 1 0
+""" )
+with open( "temp.txt", "w" ) as fh:
+    for l in T2:
+        print( l.replace( " ", "\t" ), file=fh )
+T = Table( "temp.txt" )
+T.write( )
+d = T.stratify( "M" )
+for k, v in d.items( ):
+    print( "key", k )
+    v.write( )
+d = T.stratify( "M", t=True )
+for k, v in d.items( ):
+    print( "key", k )
+    v.write( )

@@ -55,9 +55,9 @@ class Table:
 
         # set up object attributes
         self.source     = source
-        self.data       = data if data is not None else []
-        self.rowheads   = rowheads if rowheads is not None else []
-        self.colheads   = colheads if colheads is not None else []
+        self.data       = data
+        self.rowheads   = rowheads
+        self.colheads   = colheads
         self.origin     = origin
         self.missing    = missing
         self.transposed = transposed
@@ -70,20 +70,20 @@ class Table:
         # decide how to load table
         if source is None:
             self.sourcename = "<runtime>"
-            if not all( [data, rowheads, colheads] ):
+            if None in [data, rowheads, colheads]:
                 zu.die( "If no <source> then <data/rowheads/colheads> required" )
         elif isinstance( source, list ):
             self.sourcename = "<list of lists>"
-            load_from_nested_lists( self, source )
+            self.load_from_nested_lists( source )
         elif isinstance( source, dict ):
             self.sourcename = "<dict of dicts>"
-            load_from_nested_dicts( self, source )
+            self.load_from_nested_dicts( source )
         elif isinstance( source, file ):
             self.sourcename = "<file handle>"
-            load_from_file_handle( self, source )
+            self.load_from_file_handle( source )
         elif os.path.exists( source ):
             self.sourcename = "<{}>".format( source )
-            load_from_file( self, source )
+            self.load_from_file( source )
 
         # set up other table elements        
         self.remap( )
@@ -92,19 +92,22 @@ class Table:
     #### LOADERS ####
         
     def load_from_nested_dicts( self, dd ):
-        if self.rowheads == []:
+        if self.rowheads == None:
             self.rowheads = sorted( dd )
-        if self.colheads == []:
+        if self.colheads == None:
             unique = set( )
             for k, inner in dd.items( ):
                 unique.update( inner )
                 self.colheads = sorted( unique )
+        self.data = []
         for r in self.rowheads:
             inner = dd.get( r, {} )
             self.data.append( [inner.get( c, self.missing ) for c in self.colheads] )
 
     def load_from_nested_lists( self, rows ):
         counter = 0
+        self.data = []
+        self.rowheads = []
         for row in rows:
             if counter == 0:
                 self.origin = row[0] if not self.headless else self.origin
@@ -115,10 +118,10 @@ class Table:
             counter += 1
 
     def load_from_file_handle( self, fh ):
-        load_from_nested_lists( self, csv.reader( fh, csv.excel_tab ) )
+        self.load_from_nested_lists( csv.reader( fh, csv.excel_tab ) )
 
     def load_from_file( self, path ):
-        load_from_file_handle( self, zu.try_open( path ) )
+        self.load_from_file_handle( zu.try_open( path ) )
 
     #### TEST AND MAP ####
         
@@ -370,18 +373,16 @@ class Table:
         # only difference from <select> is <not in> here
         function = lambda r: (r if focus is None else self.get( r, focus )) not in choices
         return self.filter( function, **kwargs )
-
-    # **** tested to here ****
     
     def head( self, header, **kwargs ):
         """ keep only rows up to header """
-        self.report( "applying head", "header=", header, kwargs )
+        self.report( "applying <head> on", header, kwargs )
         function = lambda r: self.rowdex( r ) <= self.rowdex( header )
         return self.filter( function, **kwargs )
 
     def limit( self, header, criterion, **kwargs ):
         """ keep only rows where field value satisfies numerical criterion """
-        M = re.search( "([<>=]+) *(.*)", criterion ).groups( )
+        M = re.search( "([<>=]+) *(.*)", criterion )
         if M is None:
             zu.die( criterion, "is not a valid limit criterion" )
         op, threshold = M.groups( )
@@ -394,13 +395,13 @@ class Table:
             }
         selector = choices[op]
         function = lambda r: selector( self.get( r, header ) )                                       
-        self.report( "applying limit, requiring field", index, "to be", op, threshold, kwargs )
+        self.report( "applying <limit>, requiring", header, "to be", op, threshold, kwargs )
         return self.filter( function, **kwargs )
 
-    def nontrivial( self, minvalue=0, mincount=1, **kwargs ):
+    def nontrivial( self, mincount=1, minvalue=1e-20, **kwargs ):
         """ applies to numerical table: keep features ( row ) that exceed specified level in specified # of samples """
-        function = lambda r: mincount <= len( [k for k in self.row( r ) if k >= minlevel] )
-        self.report( "applying nontrivial", "requiring at least", mincount, "values exceeding", minlevel, kwargs )
+        function = lambda r: len( [k for k in self.row( r ) if float( k ) >= minvalue] ) >= mincount
+        self.report( "applying <nontrivial> requiring at least", mincount, "values exceeding", minvalue, kwargs )
         return self.filter( function, **kwargs )
 
     #### REGROUPING METHODS ####
@@ -410,6 +411,9 @@ class Table:
         transposed = any( [t, transposed] )
         if transposed:
             self.transpose( )
+        if grouper in self.colmap:
+            focus = grouper
+            grouper = lambda x: self.get( x, focus )
         # index which original rows below to which strata
         tables = {}
         for r in self.rowheads:
@@ -430,9 +434,11 @@ class Table:
                 tables[key].transpose( )
         if transposed:
             self.transpose( )
-        self.report( "stratified into", len( tables ), "new tables with keys like", key )
+        self.report( "stratified into", len( tables ), "new tables with keys like '{}'".format( key ) )
         return tables
 
+    # **** tested to here ****
+    
     def groupby( self, grouper, summarizer, t=False, transposed=False, n=False, new=False ):
         """ group rows on a function of the rowheads; collapse grouped values using summarizer """        
         transposed = any( [t, transposed] )
@@ -458,7 +464,7 @@ class Table:
             if self.transposed:
                 self.transpose( )
             self.remap( )
-            self.report( "after groupby rowheads like <%s>" % ( self.rowheads[0] ), "; new size is", self.size( ) )
+            self.report( "after groupby size is", self.size( ), "and rowheads like '{}'".format( self.rowheads[0] ) )
         else:
             ret = Table(
                 data       = new_data,
@@ -490,43 +496,6 @@ class Table:
         self.data = data2
         self.remap()
         self.report( "applied groupby:", "rowheads now like <%s>" % ( self.rowheads[0] ), "; new size is", self.size() )
-    """
-
-    """"
-    def stratify( self, focus ):
-        # stratifies table on focal row value; returns dictionary of tables
-        self.transpose()
-        dictDataArrays = {}
-        for rowhead, row in self.iter_rows( ):
-            stratum = self.get( rowhead, focus )
-            # the default is a copy of this table's rowheads (currently colheads)
-            dictDataArrays.setdefault( stratum, [self.data[0][:]] ).append( [rowhead] + row )
-        dictTables = {}
-        for stratum, aaData in dictDataArrays.items():
-            dictTables[stratum] = table( aaData, verbose=self.isverbose )
-            dictTables[stratum].transpose( )
-        self.transpose()
-        self.report( "stratified on", focus, "into", len( dictTables ), "new tables" )
-        return dictTables
-    """
-
-    """
-    def funcify( self, func ):
-        # stratifies table on function return value
-        self.transpose( )
-        dictDataArrays = {}
-        for rowhead, row in self.iter_rows( ):
-            ret = func( rowhead )
-            if ret is not None:
-                # the default is a copy of this table's rowheads (currently colheads)
-                dictDataArrays.setdefault( ret, [self.data[0][:]] ).append( [rowhead] + row )
-        dictTables = {}
-        for stratum, aaData in dictDataArrays.items( ):
-            dictTables[stratum] = table( aaData, verbose=self.isverbose )
-            dictTables[stratum].transpose( )
-        self.transpose( )
-        self.report( "funcified into", len( dictTables ), "new tables" )
-        return dictTables
     """
 
     """
