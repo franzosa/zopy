@@ -44,6 +44,7 @@ def kmedoids( data, metric="euclidean", k=3 ):
         swaps = []
         for im, m in enumerate( medoids ):
             for io, o in enumerate( others ):
+                # can skip m, o if o not in clusters[m]?
                 new_medoids = medoids[:]
                 new_medoids[im] = o
                 new_clusters = assign( dist, new_medoids )
