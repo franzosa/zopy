@@ -1,97 +1,83 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os
 import sys
-from random import choice, random, shuffle
-from collections import Counter
+import random 
 
 import numpy as np
 import scipy.spatial.distance as spd
 
-import zopy.utils as zu
-
 # ---------------------------------------------------------------
-#  helper functions
+# functions
 # ---------------------------------------------------------------
 
 def argmin( function, choices ):
+    """ return the choice k that minimizes function( k ) """
     return sorted( choices, key=function )[0]
 
-def assign( dist, medoids ):
-    clusters = {m:[] for m in medoids}
-    for i in range( len( dist ) ):
-        closest = argmin( lambda x: dist[i][x], medoids )
-        clusters[closest].append( i )
-    return clusters
-
-def cost( dist, clusters ):
-    return sum( [sum( dist[m][ii] ) for m, ii in clusters.items( )] )
-
-# ---------------------------------------------------------------
-# main function
-# ---------------------------------------------------------------
-
-def kmedoids( data, metric="euclidean", k=3 ):
+def compute_cost( dist, medoids ):
+    """ cost computed as average sample-medoid distance """
+    n = len( dist )
+    ret = dist[medoids].min( axis=0 ).sum( )
+    ret /= n
+    return ret
+    
+def kmedoids( data, metric="euclidean", k=3, seed=1 ):
+    """ carry out kmedoids clustering on the 2d numpy array data """
+    random.seed( seed )
     dist = spd.squareform( spd.pdist( data, metric ) )
     index = list( range( data.shape[0] ) )
-    # start with random medoids
-    shuffle( index )
+    # 0) start with random medoids
+    random.shuffle( index )
     medoids, others = index[0:k], index[k:]
-    clusters = assign( dist, medoids )
-    old_cost = cost( dist, clusters )
-    iteration = 0
+    current_cost = compute_cost( dist, medoids )
+    # 1) consider swapping each non-medoid with its medoid
+    # 2) identify the best swap
+    # 3) if best swap cost is better than current cost, make the swap, repeat 1-3
+    # 4) otherwise terminate
+    step = 0
     while True:
-        swaps = []
-        for im, m in enumerate( medoids ):
-            for io, o in enumerate( others ):
-                # can skip m, o if o not in clusters[m]?
-                new_medoids = medoids[:]
-                new_medoids[im] = o
-                new_clusters = assign( dist, new_medoids )
-                new_cost = cost( dist, new_clusters )
-                swaps.append( [new_cost, [im, io]] )
-        best_new_cost, best_swap = sorted( swaps )[0]
-        iteration += 1
-        zu.say( "iteration:", iteration )
-        zu.say( "  medoids:", medoids )
-        zu.say( "  oldcost:", old_cost )
-        zu.say( "  newcost:", best_new_cost )
-        if best_new_cost < old_cost:
-            im, io = best_swap
-            medoids[im], others[io] = others[io], medoids[im]
-            clusters = assign( dist, medoids )
-            old_cost = best_new_cost
+        step += 1
+        print( "iteration {:03d}: cost = {:.3f}".format( step, current_cost ), file=sys.stderr )
+        best_cost = None    
+        best_swap = None
+        for odex, o in enumerate( others ):
+            m = argmin( lambda x: dist[o][x], medoids )
+            mdex = medoids.index( m )
+            medoids[mdex] = o
+            swap_cost = compute_cost( dist, medoids )
+            if best_cost is None or swap_cost < best_cost:
+                best_cost = swap_cost
+                best_swap = [mdex, odex]
+            medoids[mdex] = m
+        if best_cost < current_cost:
+            current_cost = best_cost
+            mdex, odex = best_swap
+            medoids[mdex], others[odex] = others[odex], medoids[mdex]
         else:
-            zu.say( "done" )
+            print( "terminated", file=sys.stderr )
             break
-    assignments = index[:]
-    for m, ii in clusters.items( ):
-        for i in ii:
-            assignments[i] = m
+    # 5) assign samples to clusters by closest medoid
+    assignments = []
+    for i in range( len( index ) ):
+        assignments.append( argmin( lambda x: dist[i][x], medoids ) )    
     return medoids, assignments
 
 # ---------------------------------------------------------------
 # test
 # ---------------------------------------------------------------
-
+    
 if __name__ == "__main__":
-    # make some random data with k clusters
-    k = 4
-    n = 5
-    f = 10
-    gold = []
-    for i in range( k ):
-        for j in range( n ):
-            gold += [i+1]
-    shuffle( gold )
-    data = []
-    for i, kval in enumerate( gold ):
-        data.append( [kval - 0.05 + 0.1 * random( ) for j in range( f )] )
+    """ make some 2d data to scatter-check in excel as series """
+    k = 9
+    n = 1000
+    f = 2
+    data = [[random.random( ) for i in range( f )] for j in range( n )]
     data = np.array( data )
-    print gold
-    mm, aa = kmedoids( data, metric="braycurtis", k=k )
-    print aa
-    cc = Counter( )
-    for g, a in zip( gold, aa ):
-        cc[g, a] += 1
-    print cc
+    mm, cc = kmedoids( data, k=k )
+    for row, c in zip( data, cc ):
+        row = list( row )
+        row = [row[0]] + [""] * mm.index( c ) + [row[1]]
+        print( "\t".join( [str( x ) for x in row] ) )
