@@ -238,10 +238,11 @@ def hide_border( ax, half=False ):
     
 def dummy( ax ):
     """ leaves an empty plot in a grid """
+    ax.patch.set_facecolor( "none" )
     hide_xaxis( ax )
     hide_yaxis( ax )
     hide_border( ax )
-
+    
 def xbounded( ax, k ):
     l1, l2 = ax.get_xlim( )
     return l1 < k < l2
@@ -271,7 +272,7 @@ def tick_grid( ax, xaxis=True, yaxis=True, xy=False, minor=False, \
         minmin = min( xmin, ymin )
         minmax = min( xmax, ymax )
         ax.add_line( plt.Line2D( [minmin, minmax], [minmin, minmax], **kwargs ) )
-
+       
 def user_grid( ax, h=None, v=None, color="0.95", zorder=0, **kwargs ):
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
@@ -416,7 +417,39 @@ def itunes_hbars( ax, ref=None, width=1.0, color="0.95" ):
         if c % 2 == 1:
             ax.barh( y-hwidth, xmax-xmin, left=xmin,
                      height=width, color=color, edgecolor="none", zorder=0 )
-            
+
+def ybands( ax, color="0.95" ):
+    xmin, xmax = ax.get_xlim( )
+    yy = ax.yaxis.get_majorticklocs( )
+    i = 1
+    while i + 1 < len( yy ):
+        y1 = yy[i]
+        y2 = yy[i+1]
+        ax.barh( y1, xmax-xmin, left=xmin, height=y2 - y1,
+                 color=color, edgecolor="none", zorder=0 )
+        i += 2
+        
+#-------------------------------------------------------------------------------
+# design a boxplot path
+#-------------------------------------------------------------------------------
+
+verts = [
+    [-1.0, +0.0, mpl.path.Path.MOVETO],
+    [-1.0, +0.6, mpl.path.Path.LINETO],
+    [+1.0, +0.6, mpl.path.Path.LINETO],
+    [+1.0, -0.6, mpl.path.Path.LINETO],
+    [-1.0, -0.6, mpl.path.Path.LINETO],
+    [-1.0, +0.0, mpl.path.Path.LINETO],
+    [+1.0, +0.0, mpl.path.Path.LINETO],
+    [+0.0, +0.6, mpl.path.Path.MOVETO],
+    [+0.0, +1.2, mpl.path.Path.LINETO],
+    [+0.0, -0.6, mpl.path.Path.MOVETO],
+    [+0.0, -1.2, mpl.path.Path.LINETO],
+]
+codes = [k[-1]  for k in verts]
+verts = [k[0:2] for k in verts]
+boxplot_path = mpl.path.Path( verts, codes )
+
 #-------------------------------------------------------------------------------
 # legend
 #-------------------------------------------------------------------------------
@@ -471,6 +504,8 @@ class Legendizer( ):
             )
 
         else:
+            if marker == "boxplot":
+                marker = boxplot_path
             self.ax.scatter(
                 [self.margin], [self.height],
                 marker=marker,
@@ -537,6 +572,23 @@ class Legendizer( ):
 # indexing
 #-------------------------------------------------------------------------------
 
+def limdex( batches, sep=1.0, margin=1.0, width=0.0 ):
+    x = 0
+    lims = [x]
+    half = width / 2.0
+    ticks = []
+    if type( batches ) is int:
+        batches = [batches]
+    for b in batches:
+        x += margin
+        for i in range( b ):
+            x += half if i == 0 else sep
+            ticks.append( x )
+        x += half
+    x += margin
+    lims.append( x )
+    return lims, ticks
+    
 def index1( ax, groups, width=1.0, xaxis=True, bardex=False ): 
     """ Prepares an axes for plotting one column per sample """
     index = range( 0, groups )
@@ -618,16 +670,17 @@ def vline( ax, x, **kwargs ):
 # barplot
 #-------------------------------------------------------------------------------
     
-def barplot( ax, data, labels=None, yerr=None, colors=None, width=0.9 ):
-    index = index1( ax, len( data ), width=width, bardex=True )
-    for i, coord in enumerate( index ):
+def barplot( ax, data, labels=None, ticks=None, yerr=None, colors=None, width=0.9 ):
+    if ticks is None:
+        lims, ticks = limdex( len( data ), width=width )    
+    for i, x in enumerate( ticks ):
         kwargs = {}
         kwargs["edgecolor"] = "none"
         kwargs["color"] = colors[i] if colors is not None else c_dcolor
         if yerr is not None:
             kwargs["yerr"] = yerr[i]
             kwargs["ecolor"] = "black"
-        ax.bar( coord, data[i], width=width, **kwargs )
+        ax.bar( x - width / 2.0, data[i], width=width, **kwargs )
     if labels is not None:
         ax.set_xticklabels( labels, rotation_mode="anchor", ha="right", rotation=35 )
 
@@ -801,13 +854,32 @@ def swarm( ax, labels=None, values=None, data=None, order=None, colors=None,
 # boxplot
 #-------------------------------------------------------------------------------
 
-def boxplot( ax, labels=None, values=None, data=None, min_points=1,
-             width=0.9, vert=True, colors=None, face_colors=None, order=None, fliers=None, label_angle=35 ):
+def boxplot(
+
+        ax,
+        labels=None,
+        values=None,
+        data=None,
+        min_points=1,
+        width=0.9,
+        vert=True,
+        colors=None,
+        face_colors=None,
+        order=None,
+        groups=None,
+        outliers=None,
+        outliersize=5,
+        label_angle=35,
+        positions=None,
+
+):
+
     data = data if data is not None else shatter( labels, values )
     labels = sorted( data ) if order is None else order
     labels2 = [labels[k/2] for k in range( 2 * len( labels ) )]
     data = [data[k] for k in labels]
-    index = index1( ax, len( data ), xaxis=vert, width=width )
+    if positions is None:
+        lims, positions = limdex( len( data ), width=width )
     if not colors:
         colors = {l:"black" for l in labels}
     if not face_colors:
@@ -825,10 +897,9 @@ def boxplot( ax, labels=None, values=None, data=None, min_points=1,
         vert=vert,
         patch_artist=True,
         widths=width,
-        positions=index,
-        whis="range" if fliers is None else 1.5,
+        positions=positions,
+        whis="range" if outliers is None else 1.5,
     )
-    index = index1( ax, len( data ), xaxis=vert, width=width )
     # box properties
     for l, box, median in zip( labels, bp["boxes"], bp["medians"] ):
         box.set( color=colors[l] )
@@ -842,23 +913,25 @@ def boxplot( ax, labels=None, values=None, data=None, min_points=1,
         cap.set( visible=False )
     # "flier" properties
     for l, f in zip( labels, bp["fliers"] ):
-        if fliers is None:
+        if outliers is None:
             pass
-        elif fliers == "hide":
+        elif outliers == "hide":
             f.set_visible( False )
-        elif fliers == "face":
+        elif outliers == "face":
             f.set_markerfacecolor( face_colors[l] )
             f.set_markeredgecolor( "none" )
-        elif fliers == "edge":
+            f.set_markersize( outliersize )
+        elif outliers == "edge":
             f.set_markerfacecolor( colors[l] )
             f.set_markeredgecolor( "none" )
+            f.set_markersize( outliersize )
     # set verticle
     if vert:
-        ax.set_xticks( index )
+        ax.set_xticks( positions )
         if label_angle > 0 and max( [len( str( k ) ) for k in labels] ) > 3:
             ax.set_xticklabels( labels, rotation_mode="anchor", ha="right", va="center", rotation=label_angle )
         else:
             ax.set_xticklabels( labels )
     else:
-        ax.set_yticks( index )
+        ax.set_yticks( positions )
         ax.set_yticklabels( labels )
