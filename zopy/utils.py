@@ -37,16 +37,20 @@ def die( *args ):
 # file i/o
 # ---------------------------------------------------------------
 
-def try_open( path, *args, **kwargs ):
-    """ open an uncompressed or gzipped file; fail gracefully """
+def try_open( path, mode="r", *args, **kwargs ):
+    """ open a (possibly compressed?) file; fail gracefully """
     fh = None
     try:
-        if re.search( ".gz$", path ):
-            warn( "Treating", path, "as gzipped file" )
-            fh = gzip.GzipFile( path, *args, **kwargs )
+        if path.endswith( ".gz", path ):
+            say( "Treating", path, "as gzipped file" )
+            # python 3 fix
+            mode = "rt" if mode == "r" else mode
+            fh = gzip.open( path, mode=mode, *args, **kwargs )
         elif path.endswith( ".bz2" ):
-            warn( "Treating", path, "as bzipped file" )
-            fh = bz2.BZ2File( path, *args )
+            say( "Treating", path, "as bzipped file" )
+            # python 3 fix
+            mode = "rt" if mode == "r" else mode
+            fh = bz2.open( path, mode=mode, *args, **kwargs )
         else:
             fh = open( path, *args, **kwargs )
     except:
