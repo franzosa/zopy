@@ -42,17 +42,17 @@ def try_open( path, mode="r", *args, **kwargs ):
     fh = None
     try:
         if path.endswith( ".gz", path ):
-            say( "Treating", path, "as gzipped file" )
+            say( "Treating", path, "as gzip file" )
             # python 3 fix
             mode = "rt" if mode == "r" else mode
             fh = gzip.open( path, mode=mode, *args, **kwargs )
         elif path.endswith( ".bz2" ):
-            say( "Treating", path, "as bzipped file" )
+            say( "Treating", path, "as bzip2 file" )
             # python 3 fix
             mode = "rt" if mode == "r" else mode
             fh = bz2.open( path, mode=mode, *args, **kwargs )
         else:
-            fh = open( path, *args, **kwargs )
+            fh = open( path, mode=mode, *args, **kwargs )
     except:
         die( "Problem opening", path )
     return fh
