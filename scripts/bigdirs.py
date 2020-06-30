@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import argparse
-import re
-import subprocess
-from pwd import getpwuid
+from __future__ import print_function
 
-from zopy.utils import iter_rows, warn
+import os
+import re
+import sys
+import csv
+import subprocess
+import argparse
+
+from pwd import getpwuid
 
 # ---------------------------------------------------------------
 # constants
@@ -20,8 +22,7 @@ c_k = 1024
 # ---------------------------------------------------------------
 
 def get_args( ):
-    # argument parsing (python argparse)
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser( )
     parser.add_argument( "path", 
                          help="starting path for 'du' call" )
     parser.add_argument( "-c", "--critsize", 
@@ -37,6 +38,14 @@ def get_args( ):
     args = parser.parse_args( )
     return args
 
+def warn( *args ):
+    print( *args, file=sys.stderr )
+
+def iter_rows( path ):
+    with open( path ) as fh:
+        for row in csv.reader( fh, csv.excel_tab ):
+            yield row
+    
 def prettysize( size, basis=1e3 ):
     pairs = [
         [basis**4, "TB"],
@@ -141,7 +150,7 @@ def report( path, sizedict, quota ):
         root_size = quota
     prep = report_name( path, "tsv" )
     with open( prep, "w" ) as fh:
-        print >>fh, "\t".join( header )
+        print( "\t".join( header ), file=fh )
         warn( "writing analysis to {}".format( prep ) )
         for p in sorted( sizedict, key=lambda x: sizedict[x][1], reverse=True ):
             size, uniq = sizedict[p]
@@ -158,7 +167,7 @@ def report( path, sizedict, quota ):
                 uniqh, 
                 "%.2f" % ( 100 * float( uniq ) / root_size ),
                 ]
-            print >>fh, "\t".join( map( str, outitems ) )
+            print( "\t".join( map( str, outitems ) ), file=fh )
     return None
 
 # ---------------------------------------------------------------
