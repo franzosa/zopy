@@ -8,7 +8,7 @@ import random
 import math
 
 from numpy import median, mean, std
-from scipy.stats import rankdata, spearmanr, mannwhitneyu
+from scipy.stats import binom, rankdata, spearmanr, mannwhitneyu
 from scipy.stats import fisher_exact as scipy_fisher_exact
 from scipy.stats.mstats import mquantiles
 from collections import Counter
@@ -251,6 +251,18 @@ def mutinfo ( aX, aY, normalized=False ):
     for ( x, y ), joint in pJoint.items():
         result += joint * math.log( joint / pX[x] / pY[y] ) / math.log( 2 )
     return result if not normalized else result / min( shannon( aX ), shannon( aY ) )
+
+# ---------------------------------------------------------------
+# binomial error model (inspired by metaphlan soft coreness)
+# ---------------------------------------------------------------
+
+def binomial_error( errors, trials, error_rate ):
+    """ 
+    returns chances of seeing >= errors given trials + rate
+    if nontrivial (e.g. >5%) then the result (e.g. missing data)
+    could reasonably have occurred at random
+    """
+    return 1 - binom.cdf( errors - 1, trials, error_rate )
 
 # ---------------------------------------------------------------
 # class for aiding in weighted random choice
