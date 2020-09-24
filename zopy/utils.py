@@ -41,7 +41,7 @@ def try_open( path, mode="r", *args, **kwargs ):
     """ open a (possibly compressed?) file; fail gracefully """
     fh = None
     try:
-        if path.endswith( ".gz", path ):
+        if path.endswith( ".gz" ):
             say( "Treating", path, "as gzip file" )
             # python 3 fix
             mode = "rt" if mode == "r" else mode

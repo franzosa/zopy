@@ -17,7 +17,7 @@ import scripts.enrich_fisher as interface
 def get_args( ):
     parser = argparse.ArgumentParser( )
     parser.add_argument( "values", 
-                         help="list of keys of interest and values" )
+                         help="list of genes of interest and values" )
     parser.add_argument( "-m", "--min-overlap",
                          type=int,
                          help="minimum overlap between key set and given values" )
@@ -40,18 +40,18 @@ def main( ):
         func=make_link,
         headers=args.skip_headers, )
     # load key sets
-    key_sets = polymap(
-        args.key_sets,
+    gene_sets = polymap(
+        args.gene_sets,
         reverse=args.reversed_mapping, )
     # perform analysis
     results = rank_enrich( 
         values,
-        key_sets,
+        gene_sets,
         depletions=not args.exclude_depletions,
         intersect_annotated=args.intersect_annotated,
         fdr=args.fdr,
         min_overlap=args.min_overlap,
-        verbose=False,
+        verbose=True,
     )
     # write results
     fh = open( args.outfile, "w" ) if args.outfile is not None else sys.stdout

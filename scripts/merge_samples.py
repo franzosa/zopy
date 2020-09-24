@@ -9,7 +9,8 @@ import sys
 import re
 import glob
 import argparse
-from zopy.utils import reader, path2name
+
+from zopy.utils import reader, path2name, say
 from zopy.table2 import nesteddict2table
 
 # ---------------------------------------------------------------
@@ -75,7 +76,7 @@ parser.add_argument(
     )
 parser.add_argument(
     "-m", "--mode",
-    choices=["pipedelim", "humann2"],
+    choices=["piped", "piped_humann"],
     help="special sorting options",
     )
 args = parser.parse_args()
@@ -88,7 +89,7 @@ dictTableData = {}
 # modified for faster looking up 4/2/2015
 dictFeatureIndex = {}
 
-print >>sys.stderr, "Will load:", len( args.inputs ), "gathered from command line"
+say( "Will load:", len( args.inputs ), "gathered from command line" )
 
 if args.file is not None:
     before = len( args.inputs )
@@ -96,10 +97,10 @@ if args.file is not None:
         for line in fh:
             args.inputs.append( line.strip() )
     after = len( args.inputs )
-    print >>sys.stderr, "Will load:", after - before, "additional files gathered from:", args.file
+    say( "Will load:", after - before, "additional files gathered from:", args.file )
 
 for iDex, strPath in enumerate( args.inputs ):
-    print >>sys.stderr, "Loading", iDex+1, "of", len( args.inputs ), ":", strPath
+    say( sys.stderr, "Loading", iDex+1, "of", len( args.inputs ), ":", strPath )
     aastrData = []
     strColhead = path2name( strPath )
     with open( strPath ) as fh:
@@ -128,9 +129,9 @@ kwargs={"empty":args.fill_empty} if args.fill_empty is not None else { }
 # feature ordering (implemented 4/2015 for unknown reason; modified as non-default 1/2016)
 if args.mode is None:
     astrFeatures = sorted( dictFeatureIndex.keys() )
-elif args.mode == "pipedelim":
+elif args.mode == "piped":
     astrFeatures = sorted( dictFeatureIndex.keys( ), key=lambda x: x.split( "|" ) )
-elif args.mode == "humann2":
+elif args.mode == "piped_humann":
     special = {
         "UNMAPPED":0, 
         "UNGROUPED":1, 
