@@ -258,11 +258,11 @@ def mutinfo ( aX, aY, normalized=False ):
 
 def binomial_error( errors, trials, error_rate ):
     """ 
-    returns chances of seeing >= errors given trials + rate
-    if nontrivial (e.g. >5%) then the result (e.g. missing data)
-    could reasonably have occurred at random
+    returns "surprise" at the errors observed
+    i.e. p-value for (up to) observed SUCCESSES from binomial cdf
+    not consistent with error model if p is small
     """
-    return 1 - binom.cdf( errors - 1, trials, error_rate )
+    return binom.cdf( trials - errors, trials, 1 - error_rate )
 
 # ---------------------------------------------------------------
 # class for aiding in weighted random choice
