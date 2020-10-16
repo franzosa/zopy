@@ -150,7 +150,7 @@ class table:
 
     def dump( self, output_file=None ):
         """ Print the table to a file """
-        fh = open( output_file, "w" ) if output_file is not None else sys.stdout
+        fh = try_open( output_file, "w" ) if output_file is not None else sys.stdout
         dumper = csv.writer( fh, delimiter="\t", quotechar="", quoting=csv.QUOTE_NONE )
         for row in self.data:
             dumper.writerow( row )

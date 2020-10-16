@@ -41,16 +41,27 @@ def try_open( path, mode="r", *args, **kwargs ):
     """ open a (possibly compressed?) file; fail gracefully """
     fh = None
     try:
+        # 1) load as gzip file
         if path.endswith( ".gz" ):
             say( "Treating", path, "as gzip file" )
-            # python 3 fix
-            mode = "rt" if mode == "r" else mode
-            fh = gzip.open( path, mode=mode, *args, **kwargs )
+            # python 2/3 switching
+            if sys.version_info.major == 3:
+                opener = gzip.open
+                mode = "rt" if mode == "r" else mode
+            else:
+                opener = gzip.GzipFile
+            fh = opener( path, mode=mode, *args, **kwargs )
+        # 2) load as bz2 file
         elif path.endswith( ".bz2" ):
             say( "Treating", path, "as bzip2 file" )
-            # python 3 fix
-            mode = "rt" if mode == "r" else mode
-            fh = bz2.open( path, mode=mode, *args, **kwargs )
+            # python 2/3 switching
+            if sys.version_info.major == 3:
+                opener = bz2.open
+                mode = "rt" if mode == "r" else mode
+            else:
+                opener = bz2.BZ2File
+            fh = opener( path, mode=mode, *args, **kwargs )
+        # 3) load as regular file
         else:
             fh = open( path, mode=mode, *args, **kwargs )
     except:
