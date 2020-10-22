@@ -11,7 +11,7 @@ import bz2
 from collections import defaultdict, OrderedDict
 from textwrap import fill
 
-csv.field_size_limit( sys.maxsize )
+#csv.field_size_limit( sys.maxsize )
 
 # ---------------------------------------------------------------
 # warnings
