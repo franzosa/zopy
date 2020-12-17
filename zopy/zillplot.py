@@ -101,14 +101,14 @@ def scatter( ax, xx, yy, xzero=None, yzero=None, **kwargs ):
     yy2 = subvector( yy, nonzero )
     ax.scatter( xx2, yy2, **kwargs )
     # plot the zero-x points ( note kwarg overrides )
-    kwargs["marker"] = "_"
-    kwargs["edgecolor"] = kwargs["color"]
-    kwargs["s"] = c_dash_size if "s" not in kwargs else kwargs["s"]
+    kwargs["marker"] = "<"
+    #kwargs["edgecolor"] = kwargs["color"]
+    #kwargs["s"] = c_dash_size if "s" not in kwargs else kwargs["s"]
     xx2 = [xzero for k in xzeroes]
     yy2 = subvector( yy, xzeroes )
     ax.scatter( xx2, yy2, **kwargs )
     # plot the zero-y points ( note kwarg overrides )
-    kwargs["marker"] = "|"
+    kwargs["marker"] = "v"
     xx2 = subvector( xx, yzeroes )
     yy2 = [yzero for k in yzeroes]
     ax.scatter( xx2, yy2, **kwargs )

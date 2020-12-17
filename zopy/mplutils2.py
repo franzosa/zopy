@@ -736,8 +736,8 @@ def logminmax( data ):
         print >>sys.stderr, "ATTENTION ( LogMinMax ):", len( data ) - len( data2 ), "Zero|NA values not considered"
     data = data2
     tempMin = min( data )
-    tempMax = max( data ) 
-    return 10**floor( log( tempMin, 10 ) ), 10**ceil( log( tempMax, 10 ) )
+    tempMax = max( data )
+    return 10**floor( log( tempMin, 10.0 ) ), 10**ceil( log( tempMax, 10.0 ) )
 
 # DEPRECATE?
 def vkwargs( n, **kwargs ):
@@ -869,6 +869,7 @@ def boxplot(
         groups=None,
         outliers=None,
         outliersize=5,
+        outliermarker=".",
         label_angle=35,
         positions=None,
 
@@ -921,10 +922,12 @@ def boxplot(
             f.set_markerfacecolor( face_colors[l] )
             f.set_markeredgecolor( "none" )
             f.set_markersize( outliersize )
+            f.set_marker( outliermarker )
         elif outliers == "edge":
             f.set_markerfacecolor( colors[l] )
             f.set_markeredgecolor( "none" )
             f.set_markersize( outliersize )
+            f.set_marker( outliermarker )
     # set verticle
     if vert:
         ax.set_xticks( positions )

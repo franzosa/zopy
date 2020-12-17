@@ -30,13 +30,15 @@ parser.add_argument(
     )
 parser.add_argument( 
     "-k", "--key-col",
+    type=int,
     default=0,
-    help="key column",
+    help="0-based key column",
     )
 parser.add_argument( 
     "-v", "--val-col",
+    type=int,
     default=1,
-    help="value column",
+    help="0-based value column",
     )
 parser.add_argument( 
     "-p", "--key-pattern",
@@ -54,14 +56,19 @@ parser.add_argument(
     help="use file headers as colheads and not file names",
     )
 parser.add_argument( 
-    "-r", "--strip-headers",  
+    "-l", "--use-full-names",  
     action="store_true", 
-    help="remove this file type's headers",
+    help="use file's full name as colhead",
     )
 parser.add_argument( 
     "-c", "--strip-comments", 
     action="store_true", 
     help="strip comments from the file ( lines beginning with # )",
+    )
+parser.add_argument( 
+    "-s", "--strip-headers", 
+    action="store_true", 
+    help="strip headers from the file before merging",
     )
 parser.add_argument( 
     "-f", "--file",
@@ -94,25 +101,25 @@ if args.file is not None:
     before = len( args.inputs )
     with open( args.file ) as fh:
         for line in fh:
-            args.inputs.append( line.strip() )
+            args.inputs.append( line.strip( ) )
     after = len( args.inputs )
     print >>sys.stderr, "Will load:", after - before, "additional files gathered from:", args.file
 
 for iDex, strPath in enumerate( args.inputs ):
     print >>sys.stderr, "Loading", iDex+1, "of", len( args.inputs ), ":", strPath
     aastrData = []
-    strColhead = path2name( strPath )
+    strColhead = path2name( strPath ) if not args.use_full_names else os.path.split( strPath )[1]
     with open( strPath ) as fh:
         for astrItems in reader( fh ):
-            aastrData.append( [astrItems[args.key_col], astrItems[args.val_col]] ),
-    if args.strip_comments:
-        aastrData = [ astrRow for astrRow in aastrData if astrRow[0][0] != "#" ]
+            if args.strip_comments and astrItems[0][0] == "#":
+                continue
+            aastrData.append( [astrItems[args.key_col], astrItems[args.val_col]] )
     if args.use_headers:
         strColhead = aastrData[0][1]
     if args.strip_headers:
         aastrData = aastrData[1:]
     if args.key_pattern:
-        aastrData = [ astrRow for astrRow in aastrData if re.search( args.key_pattern, astrRow[0] ) ]
+        aastrData = [astrRow for astrRow in aastrData if re.search( args.key_pattern, astrRow[0] )]
     for strFeature, strValue in aastrData:
         if strFeature not in dictFeatureIndex:
             dictFeatureIndex[strFeature] = len( dictFeatureIndex ) + 1
@@ -123,11 +130,11 @@ for iDex, strPath in enumerate( args.inputs ):
 # ---------------------------------------------------------------
 
 # not ideal
-kwargs={"empty":args.fill_empty} if args.fill_empty is not None else { }
+kwargs = {"empty":args.fill_empty} if args.fill_empty is not None else { }
 
 # feature ordering (implemented 4/2015 for unknown reason; modified as non-default 1/2016)
 if args.mode is None:
-    astrFeatures = sorted( dictFeatureIndex.keys() )
+    astrFeatures = sorted( dictFeatureIndex.keys( ) )
 elif args.mode == "pipedelim":
     astrFeatures = sorted( dictFeatureIndex.keys( ), key=lambda x: x.split( "|" ) )
 elif args.mode == "humann2":
@@ -145,7 +152,7 @@ elif args.mode == "humann2":
 # convert to table ***note: sample is first key == rowhead (until transpose) ***
 tableData = nesteddict2table( dictTableData, aColheads=astrFeatures, **kwargs )
 tableData.rowsort( )
-tableData.transpose()
+tableData.transpose( )
 
 # replace origin?
 if args.origin is not None:
@@ -155,4 +162,4 @@ if args.origin is not None:
 if args.output is not None:
     tableData.dump( args.output )
 else:
-    tableData.dump()
+    tableData.dump( )
