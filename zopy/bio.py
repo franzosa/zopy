@@ -7,10 +7,13 @@ import sys
 import re
 from collections import OrderedDict
 
-from Bio import SeqIO
-
 from zopy.utils import try_open, say, die
 
+try:
+	from Bio import SeqIO
+except:
+	say( "zopy.bio imported with biopython" )
+	
 # ---------------------------------------------------------------
 # fasta
 # ---------------------------------------------------------------
@@ -85,9 +88,4 @@ def metacyc_pathway_rename( pwy_name, drop_codes=False ):
         pwy_name = "{} ({})".format( pwy_name, code )
     # cap first letter
     pwy_name = pwy_name[0].upper( ) + pwy_name[1:]
-    return pwy_name
-                                        
-
-
-
-    
+    return pwy_name                                     

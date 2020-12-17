@@ -11,7 +11,7 @@ import bz2
 from collections import defaultdict, OrderedDict
 from textwrap import fill
 
-csv.field_size_limit( sys.maxsize )
+#csv.field_size_limit( sys.maxsize )
 
 # ---------------------------------------------------------------
 # warnings
@@ -37,18 +37,33 @@ def die( *args ):
 # file i/o
 # ---------------------------------------------------------------
 
-def try_open( path, *args, **kwargs ):
-    """ open an uncompressed or gzipped file; fail gracefully """
+def try_open( path, mode="r", *args, **kwargs ):
+    """ open a (possibly compressed?) file; fail gracefully """
     fh = None
     try:
-        if re.search( ".gz$", path ):
-            warn( "Treating", path, "as gzipped file" )
-            fh = gzip.GzipFile( path, *args, **kwargs )
+        # 1) load as gzip file
+        if path.endswith( ".gz" ):
+            say( "Treating", path, "as gzip file" )
+            # python 2/3 switching
+            if sys.version_info.major == 3:
+                opener = gzip.open
+                mode = "rt" if mode == "r" else mode
+            else:
+                opener = gzip.GzipFile
+            fh = opener( path, mode=mode, *args, **kwargs )
+        # 2) load as bz2 file
         elif path.endswith( ".bz2" ):
-            warn( "Treating", path, "as bzipped file" )
-            fh = bz2.BZ2File( path, *args )
+            say( "Treating", path, "as bzip2 file" )
+            # python 2/3 switching
+            if sys.version_info.major == 3:
+                opener = bz2.open
+                mode = "rt" if mode == "r" else mode
+            else:
+                opener = bz2.BZ2File
+            fh = opener( path, mode=mode, *args, **kwargs )
+        # 3) load as regular file
         else:
-            fh = open( path, *args, **kwargs )
+            fh = open( path, mode=mode, *args, **kwargs )
     except:
         die( "Problem opening", path )
     return fh

@@ -248,7 +248,7 @@ def rank_enrich( quants,
     """
     # adjust basic map to link map
     for key, value in quants.items( ):
-        if type( value ) is not Link:
+        if not isinstance( value, Link ):
             quants[key] = Link( key, value )
     # remove useless annotations (size < min_overlap)
     annotations = preprocess_annotations( annotations, min_overlap )
