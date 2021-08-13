@@ -33,6 +33,19 @@ def die( *args ):
     say( *args )
     sys.exit( "EXITING." )
 
+def pretty_progress( current, total, update=None ):
+    if update is None:
+        update = int( 0.05 * total )
+    if current >= update and current % update == 0:
+        arg2 = "{:,}".format( total )
+        arg1 = "{:,}".format( current )
+        arg1 = " " * (len( arg2 ) - len( arg1 )) + arg1
+        perc = 100 * current / float( total )
+        perc = "{:.1f}".format( perc )
+        perc = " " * (5 - len( perc )) + perc
+        say( "step {} of {} ({}%)".format( arg1, arg2, perc ) )
+    return None
+        
 # ---------------------------------------------------------------
 # file i/o
 # ---------------------------------------------------------------
@@ -264,7 +277,7 @@ class Ticker( ):
     def report( self ):
         frac = self.count / float( self.total )
         sys.stderr.write( self.pad+"%.1f%%\r" % ( 100 * frac ) )
-
+        
 # ---------------------------------------------------------------
 # tests
 # ---------------------------------------------------------------
